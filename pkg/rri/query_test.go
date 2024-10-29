@@ -10,23 +10,25 @@ import (
 
 func TestNewQueryNil(t *testing.T) {
 	var qry *Query
-	require.NotPanics(t, func() {
-		qry = NewQuery(LatestVersion, ActionLogout, nil)
-	})
+	require.NotPanics(
+		t, func() {
+			qry = NewQuery(LatestVersion, ActionLogout, nil)
+		},
+	)
 	assert.Equal(t, 2, qry.Fields().Size())
 }
 
 func TestQueryToString(t *testing.T) {
 	assert.Equal(t, "LOGIN{\"DENIC-1000011-TEST\"}", NewLoginQuery("DENIC-1000011-TEST", "secret").String())
 	assert.Equal(t, "LOGOUT{}", NewLogoutQuery().String())
-	//TODO other actions
+	// TODO other actions
 }
 
 func TestQueryEncodeKV(t *testing.T) {
-	query, err := ParseQuery("Version: 4.0\nAction: update\naddress: foo\nDomain: denic.de\nAddress: bar")
+	query, err := ParseQuery("Version: " + string(LatestVersion) + "\nAction: update\naddress: foo\nDomain: denic.de\nAddress: bar")
 	require.NoError(t, err)
 	require.NotNil(t, query)
-	assert.Equal(t, "version: 4.0\naction: update\naddress: foo\ndomain: denic.de\naddress: bar", query.EncodeKV())
+	assert.Equal(t, "version: "+string(LatestVersion)+"\naction: update\naddress: foo\ndomain: denic.de\naddress: bar", query.EncodeKV())
 }
 
 func TestNewLoginQuery(t *testing.T) {
@@ -75,25 +77,30 @@ func TestNewInfoHandleQuery(t *testing.T) {
 
 func TestPutDomainToQueryFields(t *testing.T) {
 	fieldsFromIDN := NewQueryFieldList()
-	putDomainToQueryFields(&fieldsFromIDN, "dönic.de")
+	PutDomainToQueryFields(&fieldsFromIDN, "dönic.de")
 	require.Len(t, fieldsFromIDN, 2)
 	assert.Equal(t, []string{"dönic.de"}, fieldsFromIDN.Values(QueryFieldNameDomainIDN))
 	assert.Equal(t, []string{"xn--dnic-5qa.de"}, fieldsFromIDN.Values(QueryFieldNameDomainACE))
 
 	fieldsFromACE := NewQueryFieldList()
-	putDomainToQueryFields(&fieldsFromACE, "xn--dnic-5qa.de")
+	PutDomainToQueryFields(&fieldsFromACE, "xn--dnic-5qa.de")
 	require.Len(t, fieldsFromACE, 2)
 	assert.Equal(t, []string{"dönic.de"}, fieldsFromACE.Values(QueryFieldNameDomainIDN))
 	assert.Equal(t, []string{"xn--dnic-5qa.de"}, fieldsFromACE.Values(QueryFieldNameDomainACE))
 }
 
 func TestNewCreateDomainQuery(t *testing.T) {
-	query := NewCreateDomainQuery("denic.de", DomainData{
-		HolderHandles:         []DenicHandle{NewDenicHandle(1000011, "HOLDER-DUDE")},
-		GeneralRequestHandles: []DenicHandle{NewDenicHandle(1000011, "REQUEST-DUDE")},
-		AbuseContactHandles:   []DenicHandle{NewDenicHandle(1000011, "ABUSE-DUDE")},
-		NameServers:           []string{"ns1.denic.de", "ns2.denic.de"},
-	})
+	query := NewCreateDomainQuery(
+		"denic.de", DomainData{
+			HolderHandles:         []DenicHandle{NewDenicHandle(1000011, "HOLDER-DUDE")},
+			GeneralRequestHandles: []DenicHandle{NewDenicHandle(1000011, "REQUEST-DUDE")},
+			AbuseContactHandles:   []DenicHandle{NewDenicHandle(1000011, "ABUSE-DUDE")},
+			NameServers: []string{
+				"ns1.denic.de",
+				"ns2.denic.de",
+			},
+		},
+	)
 	require.NotNil(t, query)
 	assert.Equal(t, LatestVersion, query.Version())
 	assert.Equal(t, ActionCreate, query.Action())
@@ -105,16 +112,26 @@ func TestNewCreateDomainQuery(t *testing.T) {
 	assert.Equal(t, []string{"DENIC-1000011-HOLDER-DUDE"}, query.Field(QueryFieldNameHolder))
 	assert.Equal(t, []string{"DENIC-1000011-REQUEST-DUDE"}, query.Field(QueryFieldNameGeneralRequest))
 	assert.Equal(t, []string{"DENIC-1000011-ABUSE-DUDE"}, query.Field(QueryFieldNameAbuseContact))
-	assert.Equal(t, []string{"ns1.denic.de", "ns2.denic.de"}, query.Field(QueryFieldNameNameServer))
+	assert.Equal(
+		t, []string{
+			"ns1.denic.de",
+			"ns2.denic.de",
+		}, query.Field(QueryFieldNameNameServer),
+	)
 }
 
 func TestNewUpdateDomainQuery(t *testing.T) {
-	query := NewUpdateDomainQuery("denic.de", DomainData{
-		HolderHandles:         []DenicHandle{NewDenicHandle(1000011, "HOLDER-DUDE")},
-		GeneralRequestHandles: []DenicHandle{NewDenicHandle(1000011, "REQUEST-DUDE")},
-		AbuseContactHandles:   []DenicHandle{NewDenicHandle(1000011, "ABUSE-DUDE")},
-		NameServers:           []string{"ns1.denic.de", "ns2.denic.de"},
-	})
+	query := NewUpdateDomainQuery(
+		"denic.de", DomainData{
+			HolderHandles:         []DenicHandle{NewDenicHandle(1000011, "HOLDER-DUDE")},
+			GeneralRequestHandles: []DenicHandle{NewDenicHandle(1000011, "REQUEST-DUDE")},
+			AbuseContactHandles:   []DenicHandle{NewDenicHandle(1000011, "ABUSE-DUDE")},
+			NameServers: []string{
+				"ns1.denic.de",
+				"ns2.denic.de",
+			},
+		},
+	)
 	require.NotNil(t, query)
 	assert.Equal(t, LatestVersion, query.Version())
 	assert.Equal(t, ActionUpdate, query.Action())
@@ -126,16 +143,26 @@ func TestNewUpdateDomainQuery(t *testing.T) {
 	assert.Equal(t, []string{"DENIC-1000011-HOLDER-DUDE"}, query.Field(QueryFieldNameHolder))
 	assert.Equal(t, []string{"DENIC-1000011-REQUEST-DUDE"}, query.Field(QueryFieldNameGeneralRequest))
 	assert.Equal(t, []string{"DENIC-1000011-ABUSE-DUDE"}, query.Field(QueryFieldNameAbuseContact))
-	assert.Equal(t, []string{"ns1.denic.de", "ns2.denic.de"}, query.Field(QueryFieldNameNameServer))
+	assert.Equal(
+		t, []string{
+			"ns1.denic.de",
+			"ns2.denic.de",
+		}, query.Field(QueryFieldNameNameServer),
+	)
 }
 
 func TestNewChangeHolderQuery(t *testing.T) {
-	query := NewChangeHolderQuery("denic.de", DomainData{
-		HolderHandles:         []DenicHandle{NewDenicHandle(1000011, "HOLDER-DUDE")},
-		GeneralRequestHandles: []DenicHandle{NewDenicHandle(1000011, "REQUEST-DUDE")},
-		AbuseContactHandles:   []DenicHandle{NewDenicHandle(1000011, "ABUSE-DUDE")},
-		NameServers:           []string{"ns1.denic.de", "ns2.denic.de"},
-	})
+	query := NewChangeHolderQuery(
+		"denic.de", DomainData{
+			HolderHandles:         []DenicHandle{NewDenicHandle(1000011, "HOLDER-DUDE")},
+			GeneralRequestHandles: []DenicHandle{NewDenicHandle(1000011, "REQUEST-DUDE")},
+			AbuseContactHandles:   []DenicHandle{NewDenicHandle(1000011, "ABUSE-DUDE")},
+			NameServers: []string{
+				"ns1.denic.de",
+				"ns2.denic.de",
+			},
+		},
+	)
 	require.NotNil(t, query)
 	assert.Equal(t, LatestVersion, query.Version())
 	assert.Equal(t, ActionChangeHolder, query.Action())
@@ -147,7 +174,12 @@ func TestNewChangeHolderQuery(t *testing.T) {
 	assert.Equal(t, []string{"DENIC-1000011-HOLDER-DUDE"}, query.Field(QueryFieldNameHolder))
 	assert.Equal(t, []string{"DENIC-1000011-REQUEST-DUDE"}, query.Field(QueryFieldNameGeneralRequest))
 	assert.Equal(t, []string{"DENIC-1000011-ABUSE-DUDE"}, query.Field(QueryFieldNameAbuseContact))
-	assert.Equal(t, []string{"ns1.denic.de", "ns2.denic.de"}, query.Field(QueryFieldNameNameServer))
+	assert.Equal(
+		t, []string{
+			"ns1.denic.de",
+			"ns2.denic.de",
+		}, query.Field(QueryFieldNameNameServer),
+	)
 }
 
 func TestNewTransitDomainQuery(t *testing.T) {
@@ -235,19 +267,19 @@ func TestNewQueueDeleteQueryWithType(t *testing.T) {
 }
 
 func TestQueryNormalization(t *testing.T) {
-	query, err := ParseQuery("Version:   4.0   \nAction: iNfO\ndIsCoNnEcT: tRuE")
+	query, err := ParseQuery("Version:   " + string(LatestVersion) + "   \nAction: iNfO\ndIsCoNnEcT: tRuE")
 	require.NoError(t, err)
 	require.NotNil(t, query)
 	assert.Equal(t, LatestVersion, query.Version())
 	assert.Equal(t, ActionInfo, query.Action())
 	require.Len(t, query.Fields(), 3)
-	assert.Equal(t, []string{"4.0"}, query.Field(QueryFieldNameVersion))
+	assert.Equal(t, []string{string(LatestVersion)}, query.Field(QueryFieldNameVersion))
 	assert.Equal(t, []string{"iNfO"}, query.Field(QueryFieldNameAction))
 	assert.Equal(t, []string{"tRuE"}, query.Field(QueryFieldNameDisconnect))
 }
 
 func TestParseQueryCasing(t *testing.T) {
-	query, err := ParseQuery("Version: 4.0\nAction: login\nUser: DENIC-1000042-TEST\nPassword: very-secure")
+	query, err := ParseQuery("Version: " + string(LatestVersion) + "\nAction: login\nUser: DENIC-1000042-TEST\nPassword: very-secure")
 	require.NoError(t, err)
 	require.NotNil(t, query)
 	assert.Equal(t, LatestVersion, query.Version())
@@ -260,7 +292,7 @@ func TestParseQueryCasing(t *testing.T) {
 }
 
 func TestParseQueryWhitespaces(t *testing.T) {
-	query, err := ParseQuery("  version: \t4.0  \n\n\naction:    LOGIN\n   user: DENIC-1000042-TEST\npassword: very-secure    \n")
+	query, err := ParseQuery("  version: \t" + string(LatestVersion) + "  \n\n\naction:    LOGIN\n   user: DENIC-1000042-TEST\npassword: very-secure    \n")
 	require.NoError(t, err)
 	require.NotNil(t, query)
 	assert.Equal(t, LatestVersion, query.Version())
@@ -273,17 +305,52 @@ func TestParseQueryWhitespaces(t *testing.T) {
 }
 
 func TestParseQueryOrder(t *testing.T) {
-	query, err := ParseQuery("action: LOGIN\ncustom: 1\nversion: 4.0\nuser: DENIC-1000042-TEST\nstuff: foobar\npassword: very-secure\ncustom: 2")
+	query, err := ParseQuery("action: LOGIN\ncustom: 1\nversion: " + string(LatestVersion) + "\nuser: DENIC-1000042-TEST\nstuff: foobar\npassword: very-secure\ncustom: 2")
 	require.NoError(t, err)
 	require.NotNil(t, query)
 	assert.Equal(t, LatestVersion, query.Version())
 	assert.Equal(t, ActionLogin, query.Action())
 	require.Len(t, query.Fields(), 7)
-	assert.Equal(t, QueryField{QueryFieldName("action"), string(ActionLogin)}, query.Fields()[0])
-	assert.Equal(t, QueryField{QueryFieldName("custom"), "1"}, query.Fields()[1])
-	assert.Equal(t, QueryField{QueryFieldName("version"), string(LatestVersion)}, query.Fields()[2])
-	assert.Equal(t, QueryField{QueryFieldNameUser, "DENIC-1000042-TEST"}, query.Fields()[3])
-	assert.Equal(t, QueryField{QueryFieldName("stuff"), "foobar"}, query.Fields()[4])
-	assert.Equal(t, QueryField{QueryFieldNamePassword, "very-secure"}, query.Fields()[5])
-	assert.Equal(t, QueryField{QueryFieldName("custom"), "2"}, query.Fields()[6])
+	assert.Equal(
+		t, QueryField{
+			QueryFieldName("action"),
+			string(ActionLogin),
+		}, query.Fields()[0],
+	)
+	assert.Equal(
+		t, QueryField{
+			QueryFieldName("custom"),
+			"1",
+		}, query.Fields()[1],
+	)
+	assert.Equal(
+		t, QueryField{
+			QueryFieldName("version"),
+			string(LatestVersion),
+		}, query.Fields()[2],
+	)
+	assert.Equal(
+		t, QueryField{
+			QueryFieldNameUser,
+			"DENIC-1000042-TEST",
+		}, query.Fields()[3],
+	)
+	assert.Equal(
+		t, QueryField{
+			QueryFieldName("stuff"),
+			"foobar",
+		}, query.Fields()[4],
+	)
+	assert.Equal(
+		t, QueryField{
+			QueryFieldNamePassword,
+			"very-secure",
+		}, query.Fields()[5],
+	)
+	assert.Equal(
+		t, QueryField{
+			QueryFieldName("custom"),
+			"2",
+		}, query.Fields()[6],
+	)
 }

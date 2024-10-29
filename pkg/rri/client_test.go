@@ -11,51 +11,61 @@ import (
 )
 
 func TestClient(t *testing.T) {
-	mustWithMockServer(func(server *MockServer) {
-		server.AddUser("DENIC-1000011-TEST", "secret")
+	mustWithMockServer(
+		func(server *MockServer) {
+			server.AddUser("DENIC-1000011-TEST", "secret")
 
-		var client *Client
+			var client *Client
 
-		t.Run("NewClient", func(t *testing.T) {
-			var err error
-			client, err = NewClient(server.Address(), &ClientConfig{Insecure: true})
-			require.NoError(t, err)
-			assert.Equal(t, server.Address(), client.RemoteAddress())
-			assert.False(t, client.IsLoggedIn())
-		})
+			t.Run(
+				"NewClient", func(t *testing.T) {
+					var err error
+					client, err = NewClient(server.Address(), &ClientConfig{Insecure: true})
+					require.NoError(t, err)
+					assert.Equal(t, server.Address(), client.RemoteAddress())
+					assert.False(t, client.IsLoggedIn())
+				},
+			)
 
-		require.NotNil(t, client)
+			require.NotNil(t, client)
 
-		t.Run("QueryBeforeLogin", func(t *testing.T) {
-			_, err := client.SendQuery(NewInfoDomainQuery("denic.de"))
-			assert.Error(t, err)
-		})
+			t.Run(
+				"QueryBeforeLogin", func(t *testing.T) {
+					_, err := client.SendQuery(NewInfoDomainQuery("denic.de"))
+					assert.Error(t, err)
+				},
+			)
 
-		t.Run("Login", func(t *testing.T) {
-			assert.Error(t, client.Login("asdf", "foobar"))
-			assert.False(t, client.IsLoggedIn())
-			assert.NoError(t, client.Login("DENIC-1000011-TEST", "secret"))
-			assert.True(t, client.IsLoggedIn())
-			assert.Equal(t, "DENIC-1000011-TEST", client.CurrentUser())
-			regAccID, err := client.CurrentRegAccID()
-			require.NoError(t, err)
-			assert.Equal(t, 1000011, regAccID)
-		})
-	})
+			t.Run(
+				"Login", func(t *testing.T) {
+					assert.Error(t, client.Login("asdf", "foobar"))
+					assert.False(t, client.IsLoggedIn())
+					assert.NoError(t, client.Login("DENIC-1000011-TEST", "secret"))
+					assert.True(t, client.IsLoggedIn())
+					assert.Equal(t, "DENIC-1000011-TEST", client.CurrentUser())
+					regAccID, err := client.CurrentRegAccID()
+					require.NoError(t, err)
+					assert.Equal(t, 1000011, regAccID)
+				},
+			)
+		},
+	)
 }
 
 func TestClientConfDefaults(t *testing.T) {
 	dialCount := 0
-	client, err := NewClient("localhost", &ClientConfig{
-		TLSDialHandler: func(network, addr string, config *tls.Config) (TLSConnection, error) {
-			assert.Equal(t, "tcp", network)
-			assert.Equal(t, "localhost:51131", addr)
-			assert.Equal(t, uint16(tls.VersionTLS13), config.MinVersion)
-			assert.False(t, config.InsecureSkipVerify)
-			dialCount++
-			return nil, nil
+	client, err := NewClient(
+		"localhost", &ClientConfig{
+			TLSDialHandler: func(network, addr string, config *tls.Config) (TLSConnection, error) {
+				assert.Equal(t, "tcp", network)
+				assert.Equal(t, "localhost:51131", addr)
+				assert.Equal(t, uint16(tls.VersionTLS13), config.MinVersion)
+				assert.False(t, config.InsecureSkipVerify)
+				dialCount++
+				return nil, nil
+			},
 		},
-	})
+	)
 	require.NoError(t, err)
 	defer client.Close()
 
@@ -64,18 +74,20 @@ func TestClientConfDefaults(t *testing.T) {
 
 func TestClientConf(t *testing.T) {
 	dialCount := 0
-	client, err := NewClient("localhost:12345", &ClientConfig{
-		Insecure:      true,
-		MinTLSVersion: tls.VersionTLS12,
-		TLSDialHandler: func(network, addr string, config *tls.Config) (TLSConnection, error) {
-			assert.Equal(t, "tcp", network)
-			assert.Equal(t, "localhost:12345", addr)
-			assert.Equal(t, uint16(tls.VersionTLS12), config.MinVersion)
-			assert.True(t, config.InsecureSkipVerify)
-			dialCount++
-			return nil, nil
+	client, err := NewClient(
+		"localhost:12345", &ClientConfig{
+			Insecure:      true,
+			MinTLSVersion: tls.VersionTLS12,
+			TLSDialHandler: func(network, addr string, config *tls.Config) (TLSConnection, error) {
+				assert.Equal(t, "tcp", network)
+				assert.Equal(t, "localhost:12345", addr)
+				assert.Equal(t, uint16(tls.VersionTLS12), config.MinVersion)
+				assert.True(t, config.InsecureSkipVerify)
+				dialCount++
+				return nil, nil
+			},
 		},
-	})
+	)
 	require.NoError(t, err)
 	defer client.Close()
 
@@ -84,20 +96,41 @@ func TestClientConf(t *testing.T) {
 
 func TestClientNoAutoRetry(t *testing.T) {
 	dialCount := 0
-	conn := newMockReadWriteCloser(t, []readResponse{
-		{[]byte{0, 0, 0, 15}, nil},
-		{[]byte("RESULT: success"), nil},
-	}, []writeResponse{
-		{b64("AAAAQ3ZlcnNpb246IDQuMAphY3Rpb246IExPR0lOCnVzZXI6IERFTklDLTEwMDAwMTEtUlJJCnBhc3N3b3JkOiBzZWNyZXQ="), nil},
-		{b64("AAAAP3ZlcnNpb246IDQuMAphY3Rpb246IElORk8KZG9tYWluOiBkZW5pYy5kZQpkb21haW4tYWNlOiBkZW5pYy5kZQ=="), fmt.Errorf("broken pipe")},
-	})
-
-	client, err := NewClient("localhost", &ClientConfig{
-		TLSDialHandler: func(network, addr string, config *tls.Config) (TLSConnection, error) {
-			dialCount++
-			return conn, nil
+	conn := newMockReadWriteCloser(
+		t, []readResponse{
+			{
+				[]byte{
+					0,
+					0,
+					0,
+					15,
+				},
+				nil,
+			},
+			{
+				[]byte("RESULT: success"),
+				nil,
+			},
+		}, []writeResponse{
+			{
+				b64("AAAAQ3ZlcnNpb246IDUuMAphY3Rpb246IExPR0lOCnVzZXI6IERFTklDLTEwMDAwMTEtUlJJCnBhc3N3b3JkOiBzZWNyZXQ="),
+				nil,
+			},
+			{
+				b64("AAAAP3ZlcnNpb246IDUuMAphY3Rpb246IElORk8KZG9tYWluOiBkZW5pYy5kZQpkb21haW4tYWNlOiBkZW5pYy5kZQ=="),
+				fmt.Errorf("broken pipe"),
+			},
 		},
-	})
+	)
+
+	client, err := NewClient(
+		"localhost", &ClientConfig{
+			TLSDialHandler: func(network, addr string, config *tls.Config) (TLSConnection, error) {
+				dialCount++
+				return conn, nil
+			},
+		},
+	)
 	require.NoError(t, err)
 	defer client.Close()
 
@@ -112,26 +145,75 @@ func TestClientNoAutoRetry(t *testing.T) {
 
 func TestClientAutoRetry(t *testing.T) {
 	dialCount := 0
-	conn := newMockReadWriteCloser(t, []readResponse{
-		{[]byte{0, 0, 0, 15}, nil},
-		{[]byte("RESULT: success"), nil},
-		{[]byte{0, 0, 0, 15}, nil},
-		{[]byte("RESULT: success"), nil},
-		{[]byte{0, 0, 0, 39}, nil},
-		{[]byte("RESULT: success\nINFO: 12345 only a test"), nil},
-	}, []writeResponse{
-		{b64("AAAAQ3ZlcnNpb246IDQuMAphY3Rpb246IExPR0lOCnVzZXI6IERFTklDLTEwMDAwMTEtUlJJCnBhc3N3b3JkOiBzZWNyZXQ="), nil},
-		{b64("AAAAP3ZlcnNpb246IDQuMAphY3Rpb246IElORk8KZG9tYWluOiBkZW5pYy5kZQpkb21haW4tYWNlOiBkZW5pYy5kZQ=="), fmt.Errorf("broken pipe")},
-		{b64("AAAAQ3ZlcnNpb246IDQuMAphY3Rpb246IExPR0lOCnVzZXI6IERFTklDLTEwMDAwMTEtUlJJCnBhc3N3b3JkOiBzZWNyZXQ="), nil},
-		{b64("AAAAP3ZlcnNpb246IDQuMAphY3Rpb246IElORk8KZG9tYWluOiBkZW5pYy5kZQpkb21haW4tYWNlOiBkZW5pYy5kZQ=="), nil},
-	})
-
-	client, err := NewClient("localhost", &ClientConfig{
-		TLSDialHandler: func(network, addr string, config *tls.Config) (TLSConnection, error) {
-			dialCount++
-			return conn, nil
+	conn := newMockReadWriteCloser(
+		t, []readResponse{
+			{
+				[]byte{
+					0,
+					0,
+					0,
+					15,
+				},
+				nil,
+			},
+			{
+				[]byte("RESULT: success"),
+				nil,
+			},
+			{
+				[]byte{
+					0,
+					0,
+					0,
+					15,
+				},
+				nil,
+			},
+			{
+				[]byte("RESULT: success"),
+				nil,
+			},
+			{
+				[]byte{
+					0,
+					0,
+					0,
+					39,
+				},
+				nil,
+			},
+			{
+				[]byte("RESULT: success\nINFO: 12345 only a test"),
+				nil,
+			},
+		}, []writeResponse{
+			{
+				b64("AAAAQ3ZlcnNpb246IDUuMAphY3Rpb246IExPR0lOCnVzZXI6IERFTklDLTEwMDAwMTEtUlJJCnBhc3N3b3JkOiBzZWNyZXQ="),
+				nil,
+			},
+			{
+				b64("AAAAP3ZlcnNpb246IDUuMAphY3Rpb246IElORk8KZG9tYWluOiBkZW5pYy5kZQpkb21haW4tYWNlOiBkZW5pYy5kZQ=="),
+				fmt.Errorf("broken pipe"),
+			},
+			{
+				b64("AAAAQ3ZlcnNpb246IDUuMAphY3Rpb246IExPR0lOCnVzZXI6IERFTklDLTEwMDAwMTEtUlJJCnBhc3N3b3JkOiBzZWNyZXQ="),
+				nil,
+			},
+			{
+				b64("AAAAP3ZlcnNpb246IDUuMAphY3Rpb246IElORk8KZG9tYWluOiBkZW5pYy5kZQpkb21haW4tYWNlOiBkZW5pYy5kZQ=="),
+				nil,
+			},
 		},
-	})
+	)
+
+	client, err := NewClient(
+		"localhost", &ClientConfig{
+			TLSDialHandler: func(network, addr string, config *tls.Config) (TLSConnection, error) {
+				dialCount++
+				return conn, nil
+			},
+		},
+	)
 	require.NoError(t, err)
 	defer client.Close()
 
@@ -156,7 +238,11 @@ type mockReadWriteCloser struct {
 }
 
 func newMockReadWriteCloser(t *testing.T, readResponses []readResponse, writeResponses []writeResponse) *mockReadWriteCloser {
-	return &mockReadWriteCloser{ReadResponses: readResponses, WriteResponses: writeResponses, t: t}
+	return &mockReadWriteCloser{
+		ReadResponses:  readResponses,
+		WriteResponses: writeResponses,
+		t:              t,
+	}
 }
 
 type readResponse struct {

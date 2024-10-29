@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -51,7 +52,10 @@ type BusinessMessage struct {
 
 // NewBusinessMessage creates a new BusinessMessage with id and message.
 func NewBusinessMessage(id int64, msg string) BusinessMessage {
-	return BusinessMessage{id, msg}
+	return BusinessMessage{
+		id,
+		msg,
+	}
 }
 
 // ID returns the message id.
@@ -139,7 +143,7 @@ func (r *Response) STID() string {
 
 // String returns a human readable representation of the response.
 func (r *Response) String() string {
-	//TODO shortened, single line representation
+	// TODO shortened, single line representation
 	return r.EncodeKV()
 }
 
@@ -154,7 +158,7 @@ func (r *Response) EncodeKV() string {
 		sb.WriteString(": ")
 		sb.WriteString(f.Value)
 	}
-	//TODO encode entities
+	// TODO encode entities
 	return sb.String()
 }
 
@@ -205,7 +209,10 @@ func NewResponse(result Result, fields ResponseFieldList) *Response {
 	if fields != nil {
 		fields.CopyTo(&newFields)
 	}
-	return &Response{newFields, nil}
+	return &Response{
+		newFields,
+		nil,
+	}
 }
 
 // NewResponseWithInfo returns a new Response with the given result code and attached info messages.
@@ -218,7 +225,10 @@ func NewResponseWithInfo(result Result, fields ResponseFieldList, infos ...Busin
 	for _, msg := range infos {
 		newFields.Add(ResponseFieldNameInfo, msg.String())
 	}
-	return &Response{newFields, nil}
+	return &Response{
+		newFields,
+		nil,
+	}
 }
 
 // NewResponseWithError returns a new Response with the given result code and attached error messages.
@@ -231,7 +241,10 @@ func NewResponseWithError(result Result, fields ResponseFieldList, errors ...Bus
 	for _, msg := range errors {
 		newFields.Add(ResponseFieldNameError, msg.String())
 	}
-	return &Response{newFields, nil}
+	return &Response{
+		newFields,
+		nil,
+	}
 }
 
 // ParseResponseKV parses a response object from the given key-value response string.
@@ -245,7 +258,12 @@ func ParseResponseKV(msg string) (*Response, error) {
 			parts := strings.SplitN(line, ":", 2)
 			if len(parts) == 1 && strings.HasPrefix(parts[0], "[") && strings.HasSuffix(parts[0], "]") {
 				// begin of new entity
-				entities = append(entities, ResponseEntity{ResponseEntityName(parts[0][1 : len(parts[0])-1]).Normalize(), NewResponseFieldList()})
+				entities = append(
+					entities, ResponseEntity{
+						ResponseEntityName(parts[0][1 : len(parts[0])-1]).Normalize(),
+						NewResponseFieldList(),
+					},
+				)
 				continue
 			}
 			if len(parts) != 2 {
@@ -288,7 +306,10 @@ func ParseResponseKV(msg string) (*Response, error) {
 		}
 	}
 
-	return &Response{fields, entities}, nil
+	return &Response{
+		fields,
+		entities,
+	}, nil
 }
 
 // ParseBusinessMessageKV parses a BusinessMessage from a single KV entry.
@@ -301,11 +322,78 @@ func ParseBusinessMessageKV(str string) (BusinessMessage, error) {
 	if err != nil {
 		return BusinessMessage{}, err
 	}
-	return BusinessMessage{id, parts[1]}, nil
+	return BusinessMessage{
+		id,
+		parts[1],
+	}, nil
 }
 
 // ParseResponse tries to detect the response format (KV or XML) and returns the parsed response.
 func ParseResponse(str string) (*Response, error) {
-	//TODO detect type
+	// TODO detect type
 	return ParseResponseKV(str)
+}
+
+// ExtractVerificationInformation extracts the VerificationInformation from the Response.
+func (r *Response) ExtractVerificationInformation() ([]*VerificationInformation, error) {
+	var verificationInformation []*VerificationInformation
+	for _, eachEntity := range r.Entities() {
+		if string(eachEntity.Name().Normalize()) == string(QueryEntityVerificationInformation.Normalize()) {
+			extractedVerificationInformation, extractErr := eachEntity.ExtractVerificationInformation()
+			if extractErr != nil {
+				return nil, extractErr
+			}
+			verificationInformation = append(verificationInformation, extractedVerificationInformation)
+		}
+	}
+	return verificationInformation, nil
+}
+
+// ExtractVerificationInformation extracts the VerificationInformation from a ResponseEntity.
+func (e *ResponseEntity) ExtractVerificationInformation() (*VerificationInformation, error) {
+	responseFieldClaims := e.Field(ResponseFieldName(QueryFieldNameVerifiedClaim))
+	verificationClaims := make([]VerificationClaim, len(responseFieldClaims))
+	for i := range responseFieldClaims {
+		stringClaim, claimErr := ParseVerificationClaim(responseFieldClaims[i])
+		if claimErr != nil {
+			return nil, claimErr
+		}
+		verificationClaims[i] = stringClaim
+	}
+
+	responseFieldTimestamp := e.FirstField(ResponseFieldName(QueryFieldNameVerificationTimestamp))
+	parsedTime, parsedTimeErr := time.Parse(VerificationInformationTimestampFormat, responseFieldTimestamp)
+	if parsedTimeErr != nil {
+		return nil, fmt.Errorf("error while parsing verification timestamp %v: %v", responseFieldTimestamp, parsedTimeErr)
+	}
+
+	verificationResult, verificationResultErr := ParseVerificationResult(e.FirstField(ResponseFieldName(QueryFieldNameVerificationResult)))
+	if verificationResultErr != nil {
+		return nil, verificationResultErr
+	}
+
+	verificationEvidence, verificationEvidenceErr := ParseVerificationEvidence(e.FirstField(ResponseFieldName(QueryFieldNameVerificationEvidence)))
+	if verificationEvidenceErr != nil {
+		return nil, verificationEvidenceErr
+	}
+
+	verificationMethod, verificationMethodErr := ParseVerificationMethod(e.FirstField(ResponseFieldName(QueryFieldNameVerificationMethod)))
+	if verificationMethodErr != nil {
+		return nil, verificationMethodErr
+	}
+
+	trustFramework, trustFrameworkErr := ParseTrustFramework(e.FirstField(ResponseFieldName(QueryFieldNameTrustFramework)))
+	if trustFrameworkErr != nil {
+		return nil, trustFrameworkErr
+	}
+
+	return &VerificationInformation{
+		VerifiedClaim:         verificationClaims,
+		VerificationResult:    verificationResult,
+		VerificationReference: e.FirstField(ResponseFieldName(QueryFieldNameVerificationReference)),
+		VerificationTimestamp: parsedTime,
+		VerificationEvidence:  verificationEvidence,
+		VerificationMethod:    verificationMethod,
+		TrustFramework:        trustFramework,
+	}, nil
 }
